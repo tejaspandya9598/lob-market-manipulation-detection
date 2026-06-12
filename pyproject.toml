@@ -1,0 +1,26 @@
+[project]
+name = "lob-anomaly-detection"
+version = "1.0.0"
+description = "Detecting market manipulation in limit order book data using one-class anomaly detection"
+requires-python = ">=3.11"
+
+dependencies = [
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "torch>=2.2",
+    "pyod>=2.0",
+    "xgboost>=2.1",
+    "lightgbm>=4.3",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "pyarrow>=15.0",
+    "pyyaml>=6.0",
+    "joblib>=1.4",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ipykernel>=6.29",
+    "jupyter>=1.0",
+]

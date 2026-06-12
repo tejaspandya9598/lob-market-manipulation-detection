@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+.claude
+
+# OS
+.DS_Store
+
+# Data — not tracked (90MB+). Download raw from Kaggle, then:
+#   python -m src.pipeline prepare
+data/raw/
+data/processed/*.parquet
+
+# Model artifacts and the large per-experiment submission CSVs (regenerated)
+outputs/models/
+outputs/submissions/*.csv
+
+# NOTE: reports/figures/*.png ARE tracked — they're shown in the README.
