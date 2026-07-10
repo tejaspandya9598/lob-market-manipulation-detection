@@ -41,6 +41,40 @@ disagree enough on the tails for the ensemble to add value; the score distributi
 is sharply right-skewed, with the manipulative tail isolated above the 95th
 percentile.
 
+## The math
+
+**Isolation Forest** scores a point by how few random axis-aligned splits isolate
+it. With $E[h(x)]$ the mean isolation depth over trees and $c(n)$ the expected depth
+of an unsuccessful BST search (the normaliser),
+
+$$s(x, n) = 2^{-E[h(x)]/c(n)}, \qquad c(n) = 2H(n-1) - \tfrac{2(n-1)}{n}$$
+
+so $s \to 1$ for points that isolate almost immediately — anomalies.
+
+**ECOD** is distribution-free: estimate each feature's empirical CDF $\hat F_j$ and
+aggregate per-dimension log tail probabilities,
+
+$$O(x) = -\sum_j \log\Big(\min\big(\hat F_j(x_j),\, 1 - \hat F_j(x_j)\big)\Big)$$
+
+(with a skew correction choosing the relevant tail per feature). No hyper-parameters,
+$O(d\,n\log n)$, and the strongest single scorer here.
+
+**Autoencoder** learns the manifold of normal rows; the score is reconstruction
+error $\lVert x - g(f(x)) \rVert^2$ — manipulation doesn't reconstruct well from a
+code optimised for normal flow.
+
+**Ensemble.** Scores live on incompatible scales, so each is either squashed through
+a sigmoid centred on its *training* mean/std or converted to ranks; the final score
+is a rank average, $\frac{1}{Mn}\sum_m \text{rank}_m(x)$ — only ordering survives,
+which is exactly what an AUC-style metric rewards.
+
+## References
+
+- Liu, F.T., Ting, K.M. & Zhou, Z.-H. (2008), *Isolation Forest*, ICDM.
+- Li, Z., Zhao, Y., et al. (2022), *ECOD: Unsupervised Outlier Detection Using Empirical Cumulative Distribution Functions*, IEEE TKDE.
+- Sakurada, M. & Yairi, T. (2014), *Anomaly Detection Using Autoencoders with Nonlinear Dimensionality Reduction*, MLSDA.
+- Cartea, Á., Jaimungal, S. & Wang, Y. (2020), *Spoofing and Price Manipulation in Order-Driven Markets*, Applied Mathematical Finance — why cancel-flow imbalance is the tell.
+
 ## Project structure
 
 ```
