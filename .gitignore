@@ -22,3 +22,6 @@ outputs/models/
 outputs/submissions/*.csv
 
 # NOTE: reports/figures/*.png ARE tracked — they're shown in the README.
+*.pyc
+*.egg-info/
+build/
