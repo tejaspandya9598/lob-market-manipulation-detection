@@ -59,27 +59,55 @@ def score_ecod(X_train, X_test, params) -> np.ndarray:
     return ref_norm(model.decision_function(Xte), float(train_raw.mean()), float(train_raw.std()))
 
 
+MIN_SYMBOL_ROWS = 100
+
+
+def _clean(df, rows, feature_cols) -> np.ndarray:
+    """Feature matrix with NaN at the centre and infinities pushed to the edges.
+
+    nan_to_num's defaults send +/-inf to 0.0, which after standardising is the
+    exact middle of the distribution - the most normal value the scorer can
+    produce. An infinite feature is the opposite of normal. Clipped to a wide
+    finite bound instead so it stays an extreme.
+    """
+    X = df.loc[rows, feature_cols].to_numpy(np.float32, na_value=0.0)
+    return np.nan_to_num(X, nan=0.0, posinf=_INF_CLIP, neginf=-_INF_CLIP)
+
+
+_INF_CLIP = np.float32(1e6)
+
+
 def score_ecod_per_symbol(train_df, test_df, params, feature_cols, symbol_col="ExternalSymbol") -> np.ndarray:
-    """Fit a separate ECOD per instrument. A symbol needs >=100 training rows to
-    get its own model; otherwise its test rows keep a score of 0 (treated normal)."""
-    scores = np.zeros(len(test_df), dtype=np.float64)
+    """Fit a separate ECOD per instrument, falling back to a global model.
+
+    A symbol needs at least MIN_SYMBOL_ROWS training rows to get its own model.
+    Everything else - thin symbols, and symbols that appear in test but never in
+    train - used to keep a score of 0.0, which is not "unknown", it is the most
+    normal reading the scorer can return. A never-before-seen instrument is one of
+    the places you would most want to look for manipulation, and it was being
+    handed the cleanest possible bill of health. Those rows now go through a model
+    fitted on the whole training set.
+    """
+    scores = np.full(len(test_df), np.nan, dtype=np.float64)
     tr_sym, te_sym = train_df[symbol_col].to_numpy(), test_df[symbol_col].to_numpy()
 
-    for sym in np.unique(tr_sym):
-        tr_mask, te_mask = tr_sym == sym, te_sym == sym
-        if te_mask.sum() == 0 or tr_mask.sum() < 100:
-            continue
-
-        X_tr = train_df.loc[tr_mask, feature_cols].to_numpy(np.float32, na_value=0.0)
-        X_te = test_df.loc[te_mask, feature_cols].to_numpy(np.float32, na_value=0.0)
-        for arr in (X_tr, X_te):
-            np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-
+    def _fit_score(tr_mask, te_mask):
+        X_tr, X_te = _clean(train_df, tr_mask, feature_cols), _clean(test_df, te_mask, feature_cols)
         scaler = StandardScaler().fit(X_tr)
         model = ECOD(**params).fit(scaler.transform(X_tr))
         train_raw = model.decision_function(scaler.transform(X_tr))
-        scores[te_mask] = ref_norm(model.decision_function(scaler.transform(X_te)),
-                                   float(train_raw.mean()), float(train_raw.std()))
+        return ref_norm(model.decision_function(scaler.transform(X_te)),
+                        float(train_raw.mean()), float(train_raw.std()))
+
+    for sym in np.unique(tr_sym):
+        tr_mask, te_mask = tr_sym == sym, te_sym == sym
+        if te_mask.sum() == 0 or tr_mask.sum() < MIN_SYMBOL_ROWS:
+            continue
+        scores[te_mask] = _fit_score(tr_mask, te_mask)
+
+    unscored = np.isnan(scores)
+    if unscored.any():
+        scores[unscored] = _fit_score(np.ones(len(train_df), dtype=bool), unscored)
     return scores
 
 
@@ -163,12 +191,25 @@ def score_autoencoder(X_train, X_val, X_test, p) -> np.ndarray:
 
 # --------------------------------------------------------------------- ensemble
 def combine(scores: dict[str, np.ndarray], weights: dict[str, float]) -> np.ndarray:
-    """Weighted average of per-model scores, renormalised to [0, 1]."""
+    """Weighted average of per-model scores, renormalised to [0, 1].
+
+    Weights are looked up by name and renormalised over whatever scorers actually
+    ran, so leaving the autoencoder out just redistributes its share. If none of
+    the names line up the total is zero, and dividing by it returned a submission
+    of NaN behind a RuntimeWarning.
+    """
+    if not scores:
+        raise ValueError("no scores to combine")
     keys = list(scores)
     matrix = np.stack([scores[k] for k in keys], axis=0)
     w = np.array([weights.get(k, 0.0) for k in keys], dtype=np.float64)
-    w /= w.sum()
-    return minmax(w @ matrix)
+    total = w.sum()
+    if total <= 0.0:
+        raise ValueError(
+            f"no ensemble weight matches the scorers that ran: scorers {keys}, "
+            f"weights {sorted(weights)}"
+        )
+    return minmax((w / total) @ matrix)
 
 
 def rank_average(*score_arrays: np.ndarray) -> np.ndarray:

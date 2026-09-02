@@ -50,8 +50,20 @@ def prepare() -> None:
         log.info("wrote %s (%d rows)", out.name, len(df))
 
 
+def _matrix(df: pd.DataFrame) -> np.ndarray:
+    """Engineered-feature matrix. Infinities go to the edges, not to zero: the
+    numpy default of 0.0 lands them in the middle of a standardised feature."""
+    X = df[ENGINEERED].to_numpy(np.float64)
+    return np.nan_to_num(X, nan=0.0, posinf=1e6, neginf=-1e6)
+
+
 def run(sample: int | None = None, with_autoencoder: bool = False) -> None:
-    """Score the test set and write a submission + diagnostic figures."""
+    """Score the test set and write a submission + diagnostic figures.
+
+    Cross-sectional features only. `build_temporal_features` and the rolling
+    windows in features.TEMPORAL are used by the notebooks, not by this script -
+    they need the rows in per-symbol time order and this path subsamples.
+    """
     train = pd.read_parquet(PROCESSED / "train.parquet")
     test = pd.read_parquet(PROCESSED / "test.parquet")
     if sample:
@@ -59,8 +71,7 @@ def run(sample: int | None = None, with_autoencoder: bool = False) -> None:
         test = test.sample(min(sample, len(test)), random_state=42)
     log.info("train %s | test %s", train.shape, test.shape)
 
-    Xtr = np.nan_to_num(train[ENGINEERED].to_numpy(np.float64))
-    Xte = np.nan_to_num(test[ENGINEERED].to_numpy(np.float64))
+    Xtr, Xte = _matrix(train), _matrix(test)
 
     cfg = _cfg()
     scores = {
@@ -69,9 +80,20 @@ def run(sample: int | None = None, with_autoencoder: bool = False) -> None:
     }
     if with_autoencoder:
         from src.models import score_autoencoder  # lazy: needs torch
-        val = train.sample(frac=0.2, random_state=0)
-        scores["autoencoder"] = score_autoencoder(
-            Xtr, np.nan_to_num(val[ENGINEERED].to_numpy(np.float64)), Xte, cfg["models"]["autoencoder"])
+
+        # The validation split has to be held out. `train.sample(frac=0.2)` drew
+        # rows that stayed in Xtr, so every one of them was in the training set and
+        # early stopping was watching training loss - it would keep improving and
+        # the patience counter would never fire on real overfitting. Prefer the
+        # competition's own val split; otherwise carve one out and train on the rest.
+        val_path = PROCESSED / "val.parquet"
+        if val_path.exists():
+            X_fit, X_val = Xtr, _matrix(pd.read_parquet(val_path))
+        else:
+            held = train.sample(frac=0.2, random_state=0).index
+            X_fit, X_val = _matrix(train.drop(index=held)), _matrix(train.loc[held])
+            log.info("no val.parquet - held out %d rows from train for early stopping", len(held))
+        scores["autoencoder"] = score_autoencoder(X_fit, X_val, Xte, cfg["models"]["autoencoder"])
 
     log.info("scorers: %s", ", ".join(scores))
     # Submission ranks by rank-average (only ordering is scored). For diagnostics we
