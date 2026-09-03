@@ -36,10 +36,37 @@ Each scorer is normalised against the **training** distribution, then combined b
 
 ![Top features by correlation with the score](reports/figures/feature_importance.png)
 
-On a held-out sample the Isolation-Forest and ECOD rankings correlate ~0.93 yet
-disagree enough on the tails for the ensemble to add value; the score distribution
-is sharply right-skewed, with the manipulative tail isolated above the 95th
-percentile.
+Measured on the competition's 289,101-row test set (2026-09-02, one full
+`prepare` + `run` on the real data, 1,070,022 training rows):
+
+| pair | Spearman | Pearson |
+|---|--:|--:|
+| Isolation Forest vs ECOD | **0.865** | 0.941 |
+| Isolation Forest vs ECOD-per-symbol | 0.633 | 0.568 |
+| ECOD vs ECOD-per-symbol | 0.481 | 0.392 |
+
+The first row used to read "~0.93", which is the Pearson number described as a rank
+correlation. The *rankings* agree at 0.865; the scores agree at 0.941, and the gap
+between those two is the tails pulling apart, which is the whole reason to ensemble.
+Concretely: the top 5% by each scorer overlap on 10,946 of 14,455 rows — **76%**, so
+roughly one flagged row in four is found by only one of the two.
+
+The per-symbol variant disagrees far more (0.48 against plain ECOD) because it judges
+each instrument on its own distribution rather than the book-wide one. That is the
+larger diversification in the set, and it is worth noting that `src/pipeline.py` does
+not currently use it — the shipped `run` path is Isolation Forest plus ECOD, and the
+per-symbol scorer lives in `models.py` for the notebooks.
+
+The ECOD score distribution is right-skewed (skew **+0.80**), median 0.440 against a
+mean of 0.533, with the 95th percentile at 0.967 and the 99th at 0.989. Right-skewed,
+though "sharply" overstated it — the mass above the 95th percentile is a tail, not a
+separate mode, which is what you would expect when nothing in training is labelled.
+
+**On labels.** `train_data.csv` and `val_data.csv` do carry a `TARGET` column, but it
+is 0 for all 1,070,022 and 467,939 rows respectively, and `ClusterNo` is null
+throughout. So the one-class framing is not a modelling choice made in spite of
+labels — the training data is guaranteed-clean by construction, which is exactly the
+setting these scorers assume.
 
 ## The math
 

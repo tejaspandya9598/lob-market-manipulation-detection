@@ -25,3 +25,8 @@ outputs/submissions/*.csv
 *.pyc
 *.egg-info/
 build/
+
+# Competition data (not redistributable, ~600MB)
+data/raw/
+data/processed/
+outputs/
