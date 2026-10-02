@@ -45,8 +45,7 @@ Measured on the competition's 289,101-row test set (2026-09-02, one full
 | Isolation Forest vs ECOD-per-symbol | 0.633 | 0.568 |
 | ECOD vs ECOD-per-symbol | 0.481 | 0.392 |
 
-The first row used to read "~0.93", which is the Pearson number described as a rank
-correlation. The *rankings* agree at 0.865; the scores agree at 0.941, and the gap
+Read the two columns separately. The *rankings* agree at 0.865; the scores agree at 0.941, and the gap
 between those two is the tails pulling apart, which is the whole reason to ensemble.
 Concretely: the top 5% by each scorer overlap on 10,946 of 14,455 rows — **76%**, so
 roughly one flagged row in four is found by only one of the two.
