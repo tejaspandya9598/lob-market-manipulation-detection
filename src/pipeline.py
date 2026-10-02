@@ -83,7 +83,7 @@ def run(sample: int | None = None, with_autoencoder: bool = False) -> None:
 
         # The validation split has to be held out. `train.sample(frac=0.2)` drew
         # rows that stayed in Xtr, so every one of them was in the training set and
-        # early stopping was watching training loss - it would keep improving and
+        # early stopping was watching training loss - it would keep improving, and
         # the patience counter would never fire on real overfitting. Prefer the
         # competition's own val split; otherwise carve one out and train on the rest.
         val_path = PROCESSED / "val.parquet"

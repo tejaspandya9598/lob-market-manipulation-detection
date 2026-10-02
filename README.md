@@ -83,7 +83,7 @@ aggregate per-dimension log tail probabilities,
 
 $$O(x) = -\sum_j \log\Big(\min\big(\hat F_j(x_j),\, 1 - \hat F_j(x_j)\big)\Big)$$
 
-(with a skew correction choosing the relevant tail per feature). No hyper-parameters,
+(with a skew correction choosing the relevant tail per feature). No hyperparameters,
 $O(d\,n\log n)$, and the strongest single scorer here.
 
 **Autoencoder** learns the manifold of normal rows; the score is reconstruction
